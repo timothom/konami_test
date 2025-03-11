@@ -148,13 +148,14 @@ int main(int argc, char* argv[]) {
 		}
 	}
 
+	printf("Server and threads started.  Listening on port %d\n",DEFAULT_SERVER_PORT);
 	while (1) {
 		if ((new_socket = accept(serversocket_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen)) < 0) {
 			perror("accept failed");
 			exit(EXIT_FAILURE);
 		}
 
-		//printf("New connection, socket fd is %d, IP is: %s, port: %d\n", new_socket, inet_ntoa(address.sin_addr), ntohs(address.sin_port));
+		printf("Loop: new accept, socket fd is %d, IP is: %s, port: %d\n", new_socket, inet_ntoa(address.sin_addr), ntohs(address.sin_port));
 
 		// Get message payload
 		client_message new_message;
@@ -164,18 +165,17 @@ int main(int argc, char* argv[]) {
 		if (valread < 0) {
 			perror("recv failed, packet dropped");
 			close(new_socket);
-			continue; // Skip to the next client connection
+			continue;
 		}
 		new_message.message[valread] = '\0'; // Make SURE it's null terminated
 
-		// Add the client data to the queue
+		// Add the client data to the queue for processing on a worker thread
 		if (!enqueue(new_message)) {
-			perror("Work Queue is full, dropping a valid packet because out of queue room");
+			perror("Work Queue is full, dropping a valid packet because out of queue room\n");
+			perror("Either increase queue depth or add more/faster worker threads because they are behind\n");
 			close(new_socket);
-			continue; // Skip to the next client connection
+			continue;
 		}
-
-		// Optionally detach the thread if you don't need to join it later
 	}
 	
 	//Cleanup, will we ever get here?   Does it even matter?
