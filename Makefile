@@ -1,6 +1,6 @@
 CC = gcc
-CFLAGS = -Wall -Iinclude -O0
-DEBUGFLAGS = -DDEBUG -g
+CFLAGS = -Wall -Iinclude -O3
+DEBUGFLAGS = -DDEBUG -O0 -g
 SRC_DIR = src
 BUILD_DIR = build
 TARGET1 = server
