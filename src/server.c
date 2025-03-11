@@ -51,7 +51,7 @@ bool validate_xml () {
 }
 
 void print_command_xml_field_and_date(client_message message) {
-	// From requirements,'Parse the command field out of the XML and display it to the console along with the receive date
+	// From requirements:'Parse the command field out of the XML and display it to the console along with the receive date
 
 
 }
@@ -89,10 +89,7 @@ void *thread_main(void *arg) {
 	while (1) {
 		client_message message = dequeue();
 		assert(message.client_socket);
-		//int client_socket = message.client_socket;
-		//char *message = data.message;
-    
-		//printf("Received message: %s from client %d\n", message, client_socket);
+
 		//Process the message
 		print_command_xml_field_and_date(message);
 
@@ -112,10 +109,81 @@ void *thread_main(void *arg) {
 
 //***Main***
 int main(int argc, char* argv[]) {
-	print_usage();
+	//TODO add getopt and parse cmd line args
+	//print_usage();
 	
+	struct sockaddr_in address;
+	const int opt = 1;
+	int addrlen = sizeof(address);
+	int serversocket_fd, new_socket;
+
+	if ((serversocket_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
+		perror("Create socket failed");
+		exit(EXIT_FAILURE);
+	}
+
+	if (setsockopt(serversocket_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt))) {
+		perror("setsockopt failed");
+		exit(EXIT_FAILURE);
+	    }
+	address.sin_family = AF_INET;
+	address.sin_addr.s_addr = INADDR_ANY;
+	address.sin_port = htons(DEFAULT_SERVER_PORT);
+
+	if (bind(serversocket_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
+		perror("bind failed");
+		exit(EXIT_FAILURE);
+	}
+
+	if (listen(serversocket_fd, WORK_QUEUE_DEPTH) < 0) {
+		perror("listen failed");
+		exit(EXIT_FAILURE);
+	}
+
+	// Create threads before calling accept, there might be messages to process right away
+	for (int i = 0; i < WORKER_THREAD_COUNT; i++) {
+		if (pthread_create(&worker_pool[i], NULL, thread_main, NULL) != 0) {
+			perror("Failed to create worker threads");
+			return 1;
+		}
+	}
+
+	while (1) {
+		if ((new_socket = accept(serversocket_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen)) < 0) {
+			perror("accept failed");
+			exit(EXIT_FAILURE);
+		}
+
+		//printf("New connection, socket fd is %d, IP is: %s, port: %d\n", new_socket, inet_ntoa(address.sin_addr), ntohs(address.sin_port));
+
+		// Get message payload
+		client_message new_message;
+		new_message.client_socket = new_socket;
+		new_message.receive_timestamp = time(NULL);
+		int valread = recv(new_socket, new_message.message, BUFFER_SIZE, 0);
+		if (valread < 0) {
+			perror("recv failed, packet dropped");
+			close(new_socket);
+			continue; // Skip to the next client connection
+		}
+		new_message.message[valread] = '\0'; // Make SURE it's null terminated
+
+		// Add the client data to the queue
+		if (!enqueue(new_message)) {
+			perror("Work Queue is full, dropping a valid packet because out of queue room");
+			close(new_socket);
+			continue; // Skip to the next client connection
+		}
+
+		// Optionally detach the thread if you don't need to join it later
+	}
+	
+	//Cleanup, will we ever get here?   Does it even matter?
+	for (int i = 0; i < WORKER_THREAD_COUNT; i++) {
+		pthread_join(worker_pool[i], NULL);
+	}
+	    
+	close(serversocket_fd);
+
 	return 0;
 }
-
-
-

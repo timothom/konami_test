@@ -13,9 +13,8 @@
 
 #define USE_LOCKING                 1  //Turn this off to see all kinds of threading nightmares and crashes.   
 
-
-
-typedef struct {
+//TODO optimize client_message for cache line size, it's a little too big
+typedef struct {  
     int     client_socket;
     time_t  receive_timestamp;
     char    message[BUFFER_SIZE];
