@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -Wall -Iinclude -O3
-DEBUGFLAGS = -DDEBUG -O0 -g
+DEBUGFLAGS = -Wall -Iinclude -DDEBUG -O0 -g
 SRC_DIR = src
 BUILD_DIR = build
 TARGET1 = server
@@ -22,7 +22,8 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
 	mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-debug: CFLAGS += $(DEBUGFLAGS)
+#debug: CFLAGS += $(DEBUGFLAGS)
+debug: CFLAGS = $(DEBUGFLAGS)
 debug: all
 
 clean:

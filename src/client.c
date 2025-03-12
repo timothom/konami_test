@@ -37,7 +37,7 @@ int main(int argc, char* argv[]) {
 
 	if ((socket_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
 		perror("Create socket failed\n");
-		return -1;
+		exit(EXIT_FAILURE);
 	}
 
 	serv_addr.sin_family = AF_INET;
@@ -45,12 +45,12 @@ int main(int argc, char* argv[]) {
 
 	if (inet_pton(AF_INET, server_address, &serv_addr.sin_addr) <= 0) {
 		perror("Server address is invalid\n");
-		return -1;
+		exit(EXIT_FAILURE);
 	}
 
 	if (connect(socket_fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
 		perror("Connection failed\n");
-		return -1;
+		exit(EXIT_FAILURE);
 	}
 
 	//printf("Connected to server at %s:%d\n", server_address, port);

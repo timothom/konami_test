@@ -27,7 +27,7 @@ pthread_t worker_pool[WORKER_THREAD_COUNT];
 // Note: these are globals, so you should hold the lock before you read/write them
 // Server listener will add messages to the tail
 // Worker threads will pull messages off the head
-// Head chases tail
+// Head chases the tail
 client_message queue[WORK_QUEUE_DEPTH];
 int queue_head = 0, queue_tail = 0, queue_size = 0;
 long int total_messages = 0;
@@ -176,11 +176,20 @@ int main(int argc, char* argv[]) {
 		new_message.receive_timestamp = time(NULL);
 		int valread = recv(new_socket, new_message.message, BUFFER_SIZE, 0);
 		if (valread < 0) {
-			perror("recv failed, packet dropped");
+			fprintf(stderr,"recv failed, packet dropped");
 			close(new_socket);
 			continue;
 		}
+
 		new_message.message[valread] = '\0'; // Make SURE it's null terminated
+
+		if  (!validate_xml(new_message)) {
+			//Not valid XML, don't enqueue this for processing
+			fprintf(stderr, "Dropping packet because payload failed XML validation\n");
+			//We could count failures
+			close(new_socket);
+			continue;
+		}
 
 		// Add the client data to the queue for processing on a worker thread
 		if (!enqueue(new_message)) {
