@@ -1,7 +1,6 @@
 /* Some copyright */
 
 #include <stdio.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
@@ -16,7 +15,6 @@ void print_usage() {
 	printf("\nUsage: ./server -ip aaa.bbb.ccc.ddd -port N\n");
 	printf("-ip The IPv4 address to run the server on.  Default is %s\n", DEFAULT_SERVER_IP);
 	printf("-port The port number to bind the server listener to.  Default is %d\n\n",  DEFAULT_SERVER_PORT);
-
 }
 
 //*****Globals*****
@@ -24,13 +22,14 @@ pthread_mutex_t main_lock = PTHREAD_MUTEX_INITIALIZER; //A spinlock would be fas
 pthread_cond_t main_wait = PTHREAD_COND_INITIALIZER;
 pthread_t worker_pool[WORKER_THREAD_COUNT];
 
-// Note: these are globals, so you should hold the lock before you read/write them
+// Note: these are globals, sohold the lock before read/write
 // Server listener will add messages to the tail
 // Worker threads will pull messages off the head
 // Head chases the tail
-client_message queue[WORK_QUEUE_DEPTH];
-int queue_head = 0, queue_tail = 0, queue_size = 0;
-long int total_messages = 0;
+volatile client_message queue[WORK_QUEUE_DEPTH];
+volatile int queue_head = 0, queue_tail = 0, queue_size = 0;
+volatile long int total_messages = 0;
+// Volatile is likely overkill for these globals
 
 
 //*****Functions******
@@ -54,7 +53,7 @@ static inline void increment_total() {
 
 bool validate_xml () {
 
-	return true;
+	return false;
 }
 
 void print_command_xml_field_and_date(client_message message) {
@@ -82,12 +81,14 @@ bool enqueue(client_message message) {
 	pthread_cond_signal(&main_wait);
 	unlock();
 	return true;
-    }
+}
 
 client_message dequeue() {
 	lock();
 	while (queue_size == 0) {
+		unlock();
 		pthread_cond_wait(&main_wait, &main_lock);
+		lock();
 	}
 	client_message message = queue[queue_head];   //Make a local copy of the message and copy it out, don't return a pointer to the queue message
 	queue_head = (queue_head + 1) % WORK_QUEUE_DEPTH;
@@ -116,8 +117,7 @@ void *thread_main(void *arg) {
 	//Will never get here
 	assert(0);
 	return NULL;
-    }
-
+}
 
 
 //***Main***
@@ -185,7 +185,8 @@ int main(int argc, char* argv[]) {
 
 		if  (!validate_xml(new_message)) {
 			//Not valid XML, don't enqueue this for processing
-			fprintf(stderr, "Dropping packet because payload failed XML validation\n");
+			//Per requirements, display 'Unknown Command' in the console if an XML message isn't valid XML
+			fprintf(stdout, "\"Unknown  Command\"\n");
 			//We could count failures
 			close(new_socket);
 			continue;
