@@ -22,7 +22,7 @@ pthread_mutex_t main_lock = PTHREAD_MUTEX_INITIALIZER; //A spinlock would be fas
 pthread_cond_t main_wait = PTHREAD_COND_INITIALIZER;
 pthread_t worker_pool[WORKER_THREAD_COUNT];
 
-// Note: these are globals, sohold the lock before read/write
+// Note: these are globals, so hold the lock before read/write
 // Server listener will add messages to the tail
 // Worker threads will pull messages off the head
 // Head chases the tail
@@ -53,15 +53,15 @@ static inline void increment_total() {
 
 bool validate_xml () {
 
-	return false;
+	return true;
 }
 
 void print_command_xml_field_and_date(client_message message) {
 	// From requirements:'Parse the command field out of the XML and display it to the console along with the receive date
 	printf("processing message,  client_socket=%d, timestamp=%ld, total_messages=%ld\n message=%s\n\n",
 	message.client_socket, message.receive_timestamp, total_messages, message.message);
-	//Is it ok to not lock when reading total_messages?  I'm not too worried :)
 
+	//Is it ok to not lock when reading total_messages?  I'm not too worried :)
 	//Sucessfully processed message, so update total message count
 	increment_total();
 
@@ -86,9 +86,7 @@ bool enqueue(client_message message) {
 client_message dequeue() {
 	lock();
 	while (queue_size == 0) {
-		unlock();
 		pthread_cond_wait(&main_wait, &main_lock);
-		lock();
 	}
 	client_message message = queue[queue_head];   //Make a local copy of the message and copy it out, don't return a pointer to the queue message
 	queue_head = (queue_head + 1) % WORK_QUEUE_DEPTH;
@@ -138,7 +136,7 @@ int main(int argc, char* argv[]) {
 	if (setsockopt(serversocket_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt))) {
 		perror("setsockopt failed");
 		exit(EXIT_FAILURE);
-	    }
+	}
 	address.sin_family = AF_INET;
 	address.sin_addr.s_addr = INADDR_ANY;
 	address.sin_port = htons(DEFAULT_SERVER_PORT);
@@ -157,7 +155,7 @@ int main(int argc, char* argv[]) {
 	for (int i = 0; i < WORKER_THREAD_COUNT; i++) {
 		if (pthread_create(&worker_pool[i], NULL, thread_main, NULL) != 0) {
 			perror("Failed to create worker threads");
-			return 1;
+			exit(EXIT_FAILURE);
 		}
 	}
 
@@ -186,7 +184,7 @@ int main(int argc, char* argv[]) {
 		if  (!validate_xml(new_message)) {
 			//Not valid XML, don't enqueue this for processing
 			//Per requirements, display 'Unknown Command' in the console if an XML message isn't valid XML
-			fprintf(stdout, "\"Unknown  Command\"\n");
+			fprintf(stdout, "\"Unknown Command\"\n");
 			//We could count failures
 			close(new_socket);
 			continue;
@@ -194,8 +192,8 @@ int main(int argc, char* argv[]) {
 
 		// Add the client data to the queue for processing on a worker thread
 		if (!enqueue(new_message)) {
-			perror("Work Queue is full, dropping a valid packet because out of queue room\n");
-			perror("Either increase queue depth or add more/faster worker threads because they are behind\n");
+			fprintf(stderr, "Work Queue is full, dropping a valid packet because out of queue room\n");
+			// This is bad.  Either increase queue depth or add more/faster worker threads because they are behind
 			close(new_socket);
 			continue;
 		}
