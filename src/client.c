@@ -31,11 +31,11 @@ int main(int argc, char* argv[]) {
 		return 1;
 	}
 
-	int socket_number = 0;
+	int socket_fd = 0;
 	struct sockaddr_in serv_addr;
 	char buffer[BUFFER_SIZE] = {0};
 
-	if ((socket_number = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+	if ((socket_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
 		perror("Create socket failed\n");
 		return -1;
 	}
@@ -48,20 +48,20 @@ int main(int argc, char* argv[]) {
 		return -1;
 	}
 
-	if (connect(socket_number, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
+	if (connect(socket_fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
 		perror("Connection failed\n");
 		return -1;
 	}
 
-	printf("Connected to server at %s:%d\n", server_address, port);
+	//printf("Connected to server at %s:%d\n", server_address, port);
 
-	send(socket_number, payload, strlen(payload), 0);
-	printf("Sent: %s\n", payload);
+	send(socket_fd, payload, strlen(payload), 0);
+	//printf("Sent: %s\n", payload);
 
-	int read_rc = read(socket_number, buffer, BUFFER_SIZE);
-	printf("Response: %s\n\n  rc=%d", buffer, read_rc);
+	int read_rc = read(socket_fd, buffer, BUFFER_SIZE);
+	printf("Response: %s  rc=%d\n", buffer, read_rc);
 
-	close(socket_number);
+	close(socket_fd);
 
 	return 0;
 }
