@@ -15,7 +15,7 @@
 void print_usage() {
 	printf("\nUsage: ./server -ip aaa.bbb.ccc.ddd -port N\n");
 	printf("-ip The IPv4 address to run the server on.  Default is %s\n", DEFAULT_SERVER_IP);
-	printf("-port The port number to bind the server listener to.  Default is %d\n\n\n",  DEFAULT_SERVER_PORT);
+	printf("-port The port number to bind the server listener to.  Default is %d\n\n",  DEFAULT_SERVER_PORT);
 
 }
 
@@ -30,6 +30,7 @@ pthread_t worker_pool[WORKER_THREAD_COUNT];
 // Head chases tail
 client_message queue[WORK_QUEUE_DEPTH];
 int queue_head = 0, queue_tail = 0, queue_size = 0;
+long int total_messages = 0;
 
 
 //*****Functions******
@@ -45,6 +46,12 @@ static inline void unlock() {
 	}
 }
 
+static inline void increment_total() {
+	lock();
+	total_messages++;
+	unlock();
+}
+
 bool validate_xml () {
 
 	return true;
@@ -52,6 +59,12 @@ bool validate_xml () {
 
 void print_command_xml_field_and_date(client_message message) {
 	// From requirements:'Parse the command field out of the XML and display it to the console along with the receive date
+	printf("processing message,  client_socket=%d, timestamp=%ld, total_messages=%ld\n message=%s\n\n",
+	message.client_socket, message.receive_timestamp, total_messages, message.message);
+	//Is it ok to not lock when reading total_messages?  I'm not too worried :)
+
+	//Sucessfully processed message, so update total message count
+	increment_total();
 
 
 }
