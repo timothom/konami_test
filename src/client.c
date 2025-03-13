@@ -111,7 +111,8 @@ int main(int argc, char* argv[]) {
 
 	#pragma GCC diagnostic ignored "-Wunused-variable"  //Let me comment out my handy debug printf in peace
 	int read_rc = read(socket_fd, buffer, BUFFER_SIZE);
-	//printf("Response: %s  rc=%d\n", buffer, read_rc);
+	if (!BENCHMARK)
+		printf("Response: %s  rc=%d\n", buffer, read_rc);
 
 	if (strcmp(buffer, MESSAGE_ACK_CODE)) {
 		printf("Sever error: Message was not accepted by server\n");

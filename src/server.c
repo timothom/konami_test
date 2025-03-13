@@ -12,7 +12,6 @@
 #include "constants.h"
 #include "yxml.h"
 
-
 //*****Globals*****
 pthread_mutex_t main_lock = PTHREAD_MUTEX_INITIALIZER; //A spinlock would be faster, but a mutex prevents head-of-line blocking
 pthread_cond_t main_wait = PTHREAD_COND_INITIALIZER;
@@ -26,7 +25,6 @@ volatile client_message queue[WORK_QUEUE_DEPTH];
 volatile int queue_head = 0, queue_tail = 0, queue_size = 0;
 volatile long int total_messages = 0;
 // Volatile is likely overkill for these globals
-
 
 //*****Functions******
 static inline void lock() {
@@ -46,62 +44,6 @@ static inline void increment_total() {
 	//TODO this accumulator should have its own lock
 	total_messages++;
 	//unlock();
-}
-
-bool validate_xml (client_message message) {
-	char stack[BUFFER_SIZE];
-	yxml_ret_t rc;
-	yxml_t yxml_parser;
-	yxml_init(&yxml_parser, stack, sizeof(stack));
-
-	int i = 0;
-	while (message.message[i]) {
-		rc = yxml_parse(&yxml_parser, message.message[i]);
-		if (rc < 0) {
-			// Parser found an error or got confused, so this is probably not valid XML
-			return false;
-		}
-		i++;
-	}
-
-	return true;
-}
-
-void print_command_xml_field_and_date(client_message message) {
-	// From requirements:'Parse the command field out of the XML and display it to the console along with the receive date
-
-	/* printf("processing message,  client_socket=%d, timestamp=%ld, total_messages=%ld\n message=%s\n\n",
-	message.client_socket, message.receive_timestamp, total_messages, message.message); */
-
-	char stack[BUFFER_SIZE];
-	char buffer[BUFFER_SIZE] = {0};
-	yxml_ret_t rc;
-	yxml_t yxml_parser;
-	yxml_init(&yxml_parser, stack, sizeof(stack));
-
-	for (int i=0; i < sizeof(buffer); i++) {
-		rc = yxml_parse(&yxml_parser, message.message[i]);
-		//printf("%s:%d", 8, yxml_parser.data, rc);
-		//printf("%s,%s\n",yxml_parser.elem, yxml_parser.attr );
-
-		if (!strncmp(yxml_parser.elem, MESSAGE_TARGET_FIELD, sizeof(MESSAGE_TARGET_FIELD))) { //Command field found
-			//Drain the command field value and print it out along with the  time of day to fullfill a XML requirement
-			int j = 0;
-			//Found the first element of the payload
-			do {
-				buffer[j] = yxml_parser.data[0];
-				//printf("%s:%d", yxml_parser.data, rc);
-				rc = yxml_parse(&yxml_parser, message.message[++i]);
-				j++;
-			} while (rc == YXML_CONTENT || rc == YXML_ELEMSTART);
-			char time_string[128] = {0};
-			strftime(time_string, 80, "%Y-%m-%d", localtime(&message.receive_timestamp));
-			printf("Command Field Value=%s  Rx Time=%s\n", buffer, time_string);
-			return;			
-		}	
-	}
-	//Sucessfully processed message, so update total message count
-	increment_total();
 }
 
 bool enqueue(client_message message) {
@@ -131,7 +73,60 @@ client_message dequeue() {
 	unlock();
 	return message;
 }
-    
+
+bool validate_xml (client_message message) {
+	char parser_stack[BUFFER_SIZE];
+	yxml_ret_t rc;
+	yxml_t yxml_parser;
+	yxml_init(&yxml_parser, parser_stack, sizeof(parser_stack));
+
+	int i = 0;
+	while (message.message[i]) {
+		rc = yxml_parse(&yxml_parser, message.message[i]);
+		if (rc < 0) {
+			// Parser found an error or got confused, so this is not valid XML
+			return false;
+		}
+		i++;
+	}
+	return true;
+}
+
+void print_command_xml_field_and_date(client_message message) {
+	// From requirements:'Parse the command field out of the XML and display it to the console along with the receive date
+
+	/* printf("processing message,  client_socket=%d, timestamp=%ld, total_messages=%ld\n message=%s\n\n",
+	message.client_socket, message.receive_timestamp, total_messages, message.message); */
+
+	char parser_stack[BUFFER_SIZE];
+	char payload_buffer[BUFFER_SIZE] = {0};
+	yxml_ret_t rc;
+	yxml_t yxml_parser;
+	yxml_init(&yxml_parser, parser_stack, sizeof(parser_stack));
+
+	for (int i=0; i < sizeof(payload_buffer); i++) {
+		rc = yxml_parse(&yxml_parser, message.message[i]);
+		if (!strncmp(yxml_parser.elem, MESSAGE_TARGET_FIELD, sizeof(MESSAGE_TARGET_FIELD))) { //Command field found
+			//Drain the command field value and print it out along with the  time of day to fullfill a XML requirement
+			int j = 0;
+			//Found the first element of the payload
+			do {
+				payload_buffer[j] = yxml_parser.data[0];
+				//printf("%s:%d", yxml_parser.data, rc);
+				rc = yxml_parse(&yxml_parser, message.message[++i]);
+				j++;
+			} while (rc == YXML_CONTENT || rc == YXML_ELEMSTART);
+			char time_string[128] = {0};
+			strftime(time_string, 80, "%Y-%m-%d", localtime(&message.receive_timestamp));
+			if (!BENCHMARK)
+				printf("Command Field Value=%s  Rx Time=%s\n", payload_buffer, time_string);			
+			return;			
+		}	
+	}
+	//Sucessfully processed message, so update total message count
+	increment_total();
+}
+
 // The function the worker threads run
 void *thread_main(void *arg) {
 	while (1) {
@@ -142,7 +137,9 @@ void *thread_main(void *arg) {
 		print_command_xml_field_and_date(message);
 
 		//Simulate a bit more work
-		sleep(TASK_DELAY_TIME);
+		if (!BENCHMARK) {
+			sleep(TASK_DELAY_TIME);
+		}
 
 		// Send a ACK back to the client
 		send(message.client_socket, MESSAGE_ACK_CODE, strlen(MESSAGE_ACK_CODE), 0);
@@ -152,7 +149,6 @@ void *thread_main(void *arg) {
 	assert(0);
 	return NULL;
 }
-
 
 //***Main***
 int main(int argc, char* argv[]) {
@@ -169,7 +165,7 @@ int main(int argc, char* argv[]) {
 		printf("Usage: %s <server_address> <port>\n", argv[0]);
 		printf("Server address is an IPv4 address, default address is %s\n", DEFAULT_SERVER_IP);
 		printf("Port is an integer, default is %d\n\n", DEFAULT_SERVER_PORT);
-		return 1;
+		exit(EXIT_FAILURE);
 	}
 	
 	struct sockaddr_in address;
@@ -213,14 +209,14 @@ int main(int argc, char* argv[]) {
 		}
 	}
 
-	printf("Server and threads started.  Listening on port %d\n", port);
+	printf("Server and threads started.  Listening on port %d\n\n", port);
 	while (1) {
 		if ((new_socket = accept(serversocket_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen)) < 0) {
 			perror("accept failed");
 			exit(EXIT_FAILURE);
 		}
 
-		printf("Loop: new accept, socket fd is %d, IP is: %s, port: %d\n", new_socket, inet_ntoa(address.sin_addr), ntohs(address.sin_port));
+		//printf("Loop: new accept, socket fd is %d, IP is: %s, port: %d\n", new_socket, inet_ntoa(address.sin_addr), ntohs(address.sin_port));
 
 		// Get message payload
 		client_message new_message;
