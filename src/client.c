@@ -109,11 +109,14 @@ int main(int argc, char* argv[]) {
 	//Re-use the buffer to hold the response
 	memset(buffer, 0, sizeof(buffer));
 
+	#pragma GCC diagnostic ignored "-Wunused-variable"  //Let me comment out my handy debug printf in peace
 	int read_rc = read(socket_fd, buffer, BUFFER_SIZE);
-	printf("Response: %s  rc=%d\n", buffer, read_rc);
+	//printf("Response: %s  rc=%d\n", buffer, read_rc);
 
+	if (strcmp(buffer, MESSAGE_ACK_CODE)) {
+		printf("Sever error: Message was not accepted by server\n");
+	}
 	close(socket_fd);
-
 	return 0;
 }
 

@@ -10,5 +10,4 @@
       <Description>Address</Description>
       <Value>123 Anywhere Lane</Value>
     </Row>
-  </Data>
 </Message>

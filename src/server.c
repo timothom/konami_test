@@ -10,12 +10,8 @@
 #include <arpa/inet.h>
 
 #include "constants.h"
+#include "yxml.h"
 
-void print_usage() {
-	printf("\nUsage: ./server -ip aaa.bbb.ccc.ddd -port N\n");
-	printf("-ip The IPv4 address to run the server on.  Default is %s\n", DEFAULT_SERVER_IP);
-	printf("-port The port number to bind the server listener to.  Default is %d\n\n",  DEFAULT_SERVER_PORT);
-}
 
 //*****Globals*****
 pthread_mutex_t main_lock = PTHREAD_MUTEX_INITIALIZER; //A spinlock would be faster, but a mutex prevents head-of-line blocking
@@ -46,26 +42,66 @@ static inline void unlock() {
 }
 
 static inline void increment_total() {
-	lock();
+	//lock();
+	//TODO this accumulator should have its own lock
 	total_messages++;
-	unlock();
+	//unlock();
 }
 
-bool validate_xml () {
+bool validate_xml (client_message message) {
+	char stack[BUFFER_SIZE];
+	yxml_ret_t rc;
+	yxml_t yxml_parser;
+	yxml_init(&yxml_parser, stack, sizeof(stack));
+
+	int i = 0;
+	while (message.message[i]) {
+		rc = yxml_parse(&yxml_parser, message.message[i]);
+		if (rc < 0) {
+			// Parser found an error or got confused, so this is probably not valid XML
+			return false;
+		}
+		i++;
+	}
 
 	return true;
 }
 
 void print_command_xml_field_and_date(client_message message) {
 	// From requirements:'Parse the command field out of the XML and display it to the console along with the receive date
-	printf("processing message,  client_socket=%d, timestamp=%ld, total_messages=%ld\n message=%s\n\n",
-	message.client_socket, message.receive_timestamp, total_messages, message.message);
 
-	//Is it ok to not lock when reading total_messages?  I'm not too worried :)
+	/* printf("processing message,  client_socket=%d, timestamp=%ld, total_messages=%ld\n message=%s\n\n",
+	message.client_socket, message.receive_timestamp, total_messages, message.message); */
+
+	char stack[BUFFER_SIZE];
+	char buffer[BUFFER_SIZE] = {0};
+	yxml_ret_t rc;
+	yxml_t yxml_parser;
+	yxml_init(&yxml_parser, stack, sizeof(stack));
+
+	for (int i=0; i < sizeof(buffer); i++) {
+		rc = yxml_parse(&yxml_parser, message.message[i]);
+		//printf("%s:%d", 8, yxml_parser.data, rc);
+		//printf("%s,%s\n",yxml_parser.elem, yxml_parser.attr );
+
+		if (!strncmp(yxml_parser.elem, MESSAGE_TARGET_FIELD, sizeof(MESSAGE_TARGET_FIELD))) { //Command field found
+			//Drain the command field value and print it out along with the  time of day to fullfill a XML requirement
+			int j = 0;
+			//Found the first element of the payload
+			do {
+				buffer[j] = yxml_parser.data[0];
+				//printf("%s:%d", yxml_parser.data, rc);
+				rc = yxml_parse(&yxml_parser, message.message[++i]);
+				j++;
+			} while (rc == YXML_CONTENT || rc == YXML_ELEMSTART);
+			char time_string[128] = {0};
+			strftime(time_string, 80, "%Y-%m-%d", localtime(&message.receive_timestamp));
+			printf("Command Field Value=%s  Rx Time=%s\n", buffer, time_string);
+			return;			
+		}	
+	}
 	//Sucessfully processed message, so update total message count
 	increment_total();
-
-
 }
 
 bool enqueue(client_message message) {
@@ -120,13 +156,31 @@ void *thread_main(void *arg) {
 
 //***Main***
 int main(int argc, char* argv[]) {
-	//TODO add getopt and parse cmd line args
-	//print_usage();
+	char *server_address;
+	int port;
+	if (argc == 1) {
+		//Use default IP and port
+		server_address = DEFAULT_SERVER_IP;
+		port = DEFAULT_SERVER_PORT;		
+	} else if (argc == 3) {
+		server_address = argv[1];
+		port = atoi(argv[2]);
+	} else {
+		printf("Usage: %s <server_address> <port>\n", argv[0]);
+		printf("Server address is an IPv4 address, default address is %s\n", DEFAULT_SERVER_IP);
+		printf("Port is an integer, default is %d\n\n", DEFAULT_SERVER_PORT);
+		return 1;
+	}
 	
 	struct sockaddr_in address;
 	const int opt = 1;
 	int addrlen = sizeof(address);
 	int serversocket_fd, new_socket;
+
+	if (inet_pton(AF_INET, server_address, &address.sin_addr) <= 0) {
+		fprintf (stderr, "Server address is invalid\n");
+		exit(EXIT_FAILURE);
+	}
 
 	if ((serversocket_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
 		perror("Create socket failed");
@@ -139,7 +193,7 @@ int main(int argc, char* argv[]) {
 	}
 	address.sin_family = AF_INET;
 	address.sin_addr.s_addr = INADDR_ANY;
-	address.sin_port = htons(DEFAULT_SERVER_PORT);
+	address.sin_port = htons(port);
 
 	if (bind(serversocket_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
 		perror("bind failed");
@@ -159,7 +213,7 @@ int main(int argc, char* argv[]) {
 		}
 	}
 
-	printf("Server and threads started.  Listening on port %d\n",DEFAULT_SERVER_PORT);
+	printf("Server and threads started.  Listening on port %d\n", port);
 	while (1) {
 		if ((new_socket = accept(serversocket_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen)) < 0) {
 			perror("accept failed");

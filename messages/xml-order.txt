@@ -1,6 +1,5 @@
-<?xmlll version='1.0' encoding='UTF-8'?>
+<?xml version='1.0' encoding='UTF-8'?>
 <Message>
-  <Command>Print</Command>
   <Data>
     <Row>
       <Description>Name</Description>
@@ -10,5 +9,6 @@
       <Description>Address</Description>
       <Value>123 Anywhere Lane</Value>
     </Row>
+  <Command>Printtt2</Command>
   </Data>
 </Message>
