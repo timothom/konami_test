@@ -123,6 +123,7 @@ void print_command_xml_field_and_date(client_message message) {
 			return;			
 		}	
 	}
+	//TODO, what if we run out of buffer?  We just fall out here and drop the message
 	//Sucessfully processed message, so update total message count
 	increment_total();
 }
@@ -235,7 +236,7 @@ int main(int argc, char* argv[]) {
 			//Not valid XML, don't enqueue this for processing
 			//Per requirements, display 'Unknown Command' in the console if an XML message isn't valid XML
 			fprintf(stdout, "\"Unknown Command\"\n");
-			//We could count failures
+			//TODO We could count failures/drops
 			close(new_socket);
 			continue;
 		}

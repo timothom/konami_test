@@ -19,7 +19,6 @@ libyxml.a: yxml.c yxml.h
 	$(CC) -Iinclude -Wall -Wextra -Wno-unused-parameter -O2 -g -c yxml.c
 	$(AR) rcs libyxml.a yxml.o
 
-
 $(BUILD_DIR)/$(TARGET1): $(OBJECTS1)
 	$(CC) $(CFLAGS)  -L. -l:yxml.o -o $@ $^
 

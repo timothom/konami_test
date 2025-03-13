@@ -21,5 +21,3 @@ typedef struct {
     time_t  receive_timestamp;
     char    message[BUFFER_SIZE];
 } client_message;
-
-
